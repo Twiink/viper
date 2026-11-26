@@ -929,6 +929,37 @@ func TestUnmarshalWithDefaultDecodeHook(t *testing.T) {
 	}, &C)
 }
 
+func TestSubWithDefaultDecodeHook(t *testing.T) {
+	v := NewWithOptions(WithDecodeHook(mapstructure.StringToSliceHookFunc(";")))
+	v.Set("service.client.peers", "east;west")
+	type config struct {
+		Peers []string
+	}
+	want := config{Peers: []string{"east", "west"}}
+	var parent config
+	require.NoError(t, v.UnmarshalKey("service.client", &parent))
+	require.Equal(t, want, parent)
+
+	for name, sub := range map[string]*Viper{
+		"direct":  v.Sub("service.client"),
+		"chained": v.Sub("service").Sub("client"),
+	} {
+		t.Run(name, func(t *testing.T) {
+			var got config
+			require.NoError(t, sub.Unmarshal(&got))
+			assert.Equal(t, want, got)
+
+			var exact config
+			require.NoError(t, sub.UnmarshalExact(&exact))
+			assert.Equal(t, want, exact)
+
+			var peers []string
+			require.NoError(t, sub.UnmarshalKey("peers", &peers))
+			assert.Equal(t, want.Peers, peers)
+		})
+	}
+}
+
 func TestUnmarshalWithDecoderOptions(t *testing.T) {
 	v := New()
 	v.Set("credentials", "{\"foo\":\"bar\"}")
